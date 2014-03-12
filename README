@@ -2,7 +2,7 @@ NAME
     Dist::Zilla::Plugin::Rinci::Wrap - Insert wrapper-generated code
 
 VERSION
-    version 0.01
+    version 0.02
 
 SYNOPSIS
     In dist.ini:
@@ -10,6 +10,8 @@ SYNOPSIS
      [Rinci::Wrap]
      ; optional, will be eval'ed as Perl code and passed to wrap_sub()
      wrap_args = { validate_result => 0, convert => {retry=>2} }
+     ; optional, will not squish code and add marker comment
+     debug=1
 
     In your module:
 
