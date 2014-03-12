@@ -21,6 +21,7 @@ my %WriteMakefileArgs = (
   "LICENSE" => "perl",
   "NAME" => "Dist::Zilla::Plugin::Rinci::Wrap",
   "PREREQ_PM" => {
+    "Module::CoreList" => "2.99",
     "Perinci::Sub::Wrapper" => "0.53",
     "experimental" => 0
   },
@@ -30,7 +31,7 @@ my %WriteMakefileArgs = (
     "IPC::Open3" => 0,
     "Test::More" => 0
   },
-  "VERSION" => "0.02",
+  "VERSION" => "0.03",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -41,6 +42,7 @@ my %FallbackPrereqs = (
   "File::Spec" => 0,
   "IO::Handle" => 0,
   "IPC::Open3" => 0,
+  "Module::CoreList" => "2.99",
   "Perinci::Sub::Wrapper" => "0.53",
   "Test::More" => 0,
   "experimental" => 0
