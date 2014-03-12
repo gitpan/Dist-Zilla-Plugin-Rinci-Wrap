@@ -6,7 +6,7 @@ use warnings;
 
 use Perinci::Sub::Wrapper qw(wrap_sub);
 
-our $VERSION = '0.03'; # VERSION
+our $VERSION = '0.04'; # VERSION
 
 use Moose;
 use experimental 'smartmatch';
@@ -34,9 +34,18 @@ has wrap_args => (
 );
 
 has _wrap_args_compiled => (
-    isa => 'Bool',
-    is  => 'rw',
+    isa     => 'Bool',
+    is      => 'rw',
 );
+
+has _prereqs => (
+    is      => 'rw',
+);
+has _checked_modules => (
+    is      => 'rw',
+    default => sub { {} },
+);
+
 
 sub _squish_code {
     my ($self, $code) = @_;
@@ -124,6 +133,7 @@ sub munge_file {
         $self->log_debug("Generating wrapper code for sub '$_' ...");
         my $res = wrap_sub(
             %{ $wrap_args },
+            %{ $metas->{$_}{"x.dist.zilla.plugin.rinci.wrap.wrap_args"} // {} },
             sub_name  => "$pkg_name\::$_",
             meta      => $metas->{$_},
             meta_name => "\$$pkg_name\::SPEC{$_}",
@@ -150,35 +160,44 @@ sub munge_file {
     # code is mentioned in Prereqs. XXX this should use proper method. XXX we
     # should not parse dist.ini for each file.
     {
-        require Module::CoreList;
 
-        (-f "dist.ini") or do {
-            die "dist.ini not found, something's wrong";
-        };
-        my $in_prereqs;
-        my %prereqs;
-        open my($fh), "<", "dist.ini";
-        while (<$fh>) {
-            next unless /\S/;
-            next if /\s*;/;
-            if (/^\s*\[\s*([^\]+]+)\s*\]/) {
-                $in_prereqs = $1 eq 'Prereqs';
-                next;
+        unless ($self->_prereqs) {
+            require Module::CoreList;
+
+            (-f "dist.ini") or do {
+                $self->log_fatal("dist.ini not found, something's wrong");
+            };
+            my $in_prereqs;
+            my %prereqs;
+            $self->log_debug("Parsing prereqs in dist.ini ...");
+            open my($fh), "<", "dist.ini";
+            while (<$fh>) {
+                next unless /\S/;
+                next if /\s*;/;
+                if (/^\s*\[\s*([^\]+]+)\s*\]/) {
+                    $in_prereqs = $1 eq 'Prereqs';
+                    next;
+                }
+                next unless $in_prereqs;
+                /^\s*(\S+)\s*=\s*(\S+)/ or
+                    $self->log_fatal("dist.ini:$.: syntax error");
+                $prereqs{$1} = $2;
             }
-            next unless $in_prereqs;
-            /^\s*(\S+)\s*=\s*(\S+)/ or die "Syntax error in dist.ini:$.";
-            $prereqs{$1} = $2;
+            #use Data::Dump; dd \%prereqs;
+            $self->_prereqs(\%prereqs);
         }
-        #use Data::Dump; dd \%prereqs;
 
-        my $perl_version = $prereqs{perl};
+        my $perl_version = $self->_prereqs->{perl};
 
         for my $mod (sort keys %mods) {
             next if Module::CoreList::is_core($mod, undef, $perl_version);
+            next if $self->_checked_modules->{$mod};
             $self->log_debug("Checking if dist.ini contains Prereqs for $mod");
-            die "Wrapper code requires non-core module '$mod',  ".
-                "please specify it in dist.ini's Prereqs section"
-                    unless defined $prereqs{$mod};
+            $self->log_fatal(
+                "Wrapper code requires non-core module '$mod', ".
+                    "please specify it in dist.ini's Prereqs section")
+                unless defined $self->_prereqs->{$mod};
+            $self->_checked_modules->{$mod}++;
         }
     }
 
@@ -208,7 +227,10 @@ sub munge_file {
             $self->log_debug("Found sub declaration: $2");
             my $first_sub = !$sub_name;
             ($sub_indent, $sub_name) = ($1, $2);
-            next unless $wres{$sub_name};
+            unless ($wres{$sub_name}) {
+                $self->log_debug("Skipped wrapping sub $sub_name (no metadata)");
+                next;
+            }
             # put modify-meta code
             $_ = "\n$1# [Rinci::Wrap] END presub2\n$_" if $self->debug;
             $_ = $self->_squish_code($wres{$sub_name}{source}{presub2}). " $_";
@@ -230,7 +252,8 @@ sub munge_file {
         next unless $sub_name;
 
         # 'my %args = @_' statement
-        if (/^(\s*)my \s+ [\%\@\$]args \s* = /x) {
+        if (/^(\s*)(my \s+ [\%\@\$]args \s* = .+)/x) {
+            $self->log_debug("[sub $sub_name] Found a place to insert preamble (after '$2' statement)");
             # put preamble code
             $_ = "$_\n$1# [Rinci::Wrap] BEGIN preamble\n" if $self->debug;
             my $preamble = $wres{$sub_name}{source}{preamble};
@@ -245,12 +268,14 @@ sub munge_file {
 
         # sub closing statement
         if (/^${sub_indent}\}/) {
+            $self->log_debug("Found sub closing: $sub_name");
+            next unless $wres{$sub_name};
+
             unless ($has_put_preamble) {
                 $self->log_fatal("[sub $sub_name] hasn't put preamble ".
                                      "wrapper code yet");
-                return;
             }
-            next unless $has_postamble;
+            goto DONE_POSTAMBLE unless $has_postamble;
 
             # put postamble code
             my $postamble = "}; " . # for closing of the do { block
@@ -262,6 +287,7 @@ sub munge_file {
                 if $self->debug;
             $has_put_postamble = 1;
 
+          DONE_POSTAMBLE:
             # mark sub done by deleting entry from %wres
             delete $wres{$sub_name};
 
@@ -272,13 +298,11 @@ sub munge_file {
     if (!$has_put_postamble && $sub_name) {
         $self->log_fatal("[sub $sub_name] hasn't put postamble ".
                              "wrapper code yet");
-        return;
     }
 
     if (keys %wres) {
-        $self->log_fatal("Some subs are not yet wrapped: ".
+        $self->log_fatal("Some subs are not yet wrapped (probably because I couldn't find sub declaration or a place to insert the preamble/postamble): ".
                              join(", ", sort keys %wres));
-        return;
     }
 
     $self->log("Adding wrapper code to $fname ...");
@@ -302,7 +326,7 @@ Dist::Zilla::Plugin::Rinci::Wrap - Insert wrapper-generated code
 
 =head1 VERSION
 
-version 0.03
+version 0.04
 
 =head1 SYNOPSIS
 
@@ -464,6 +488,17 @@ behaviours/functionalities.
 Admittedly, yes. Wrapper-generated code is formatted as a single long line to
 avoid modifying line numbers, which is desirable when debugging your modules. An
 option to not compress everything as a single line might be added in the future.
+
+=head2 How do I customize wrapping for my function
+
+In the future there will be options you can specify in C<dist.ini>.
+
+For now, you can put in your Rinci function metadata:
+
+ "x.dist.zilla.plugin.rinci.wrap.wrap_args" => { validate_args => 0 },
+
+This will be merged and will override C<wrap_args> keys specified in
+C<dist.ini>.
 
 =head1 TODO
 

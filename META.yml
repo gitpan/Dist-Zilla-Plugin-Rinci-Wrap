@@ -25,7 +25,7 @@ resources:
   bugtracker: https://rt.cpan.org/Public/Dist/Display.html?Name=Dist-Zilla-Plugin-Rinci-Wrap
   homepage: https://metacpan.org/release/Dist-Zilla-Plugin-Rinci-Wrap
   repository: git://github.com/sharyanto/perl-Dist-Zilla-Plugin-Rinci-Wrap.git
-version: 0.03
+version: 0.04
 x_Dist_Zilla:
   perl:
     version: 5.018001
