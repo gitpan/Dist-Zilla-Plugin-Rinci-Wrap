@@ -6,7 +6,7 @@ use warnings;
 
 use Perinci::Sub::Wrapper qw(wrap_sub);
 
-our $VERSION = '0.04'; # VERSION
+our $VERSION = '0.05'; # VERSION
 
 use Moose;
 use experimental 'smartmatch';
@@ -326,7 +326,7 @@ Dist::Zilla::Plugin::Rinci::Wrap - Insert wrapper-generated code
 
 =head1 VERSION
 
-version 0.04
+version 0.05
 
 =head1 SYNOPSIS
 

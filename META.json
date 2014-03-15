@@ -29,6 +29,7 @@
       },
       "runtime" : {
          "requires" : {
+            "Dist::Zilla" : "0",
             "Module::CoreList" : "2.99",
             "Perinci::Sub::Wrapper" : "0.53",
             "experimental" : "0",
@@ -56,7 +57,7 @@
          "web" : "https://github.com/sharyanto/perl-Dist-Zilla-Plugin-Rinci-Wrap"
       }
    },
-   "version" : "0.04",
+   "version" : "0.05",
    "x_Dist_Zilla" : {
       "perl" : {
          "version" : "5.018001"

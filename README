@@ -2,7 +2,7 @@ NAME
     Dist::Zilla::Plugin::Rinci::Wrap - Insert wrapper-generated code
 
 VERSION
-    version 0.04
+    version 0.05
 
 SYNOPSIS
     In dist.ini:
